@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f3f0e9" />
+    <title>Endless Form / Chair Collection</title>
+    <link rel="stylesheet" href="./styles.css?v=20260609-2" />
+  </head>
+  <body>
+    <header class="site-header">
+      <button class="menu-button" type="button" aria-label="打开菜单"><span></span><span></span></button>
+      <a class="wordmark" href="#collection">Endless Form</a>
+      <div class="header-actions">
+        <a href="#story">故事</a>
+        <a href="#selector">系列</a>
+        <a href="#customize">定制</a>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero" id="collection">
+        <div class="hero-stage">
+          <canvas id="chair-canvas" aria-label="七把椅子三维系列"></canvas>
+          <div class="model-status" id="model-status">正在载入七把椅子与原始贴图...</div>
+        </div>
+        <div class="hero-copy">
+          <p class="eyebrow">DIGITAL ART PRACTICE · 2026</p>
+          <h1>Endless Form</h1>
+          <p class="hero-subtitle">同一种坐姿，七种不同的表面叙事。</p>
+          <a class="pill-link" href="#selector">探索系列</a>
+        </div>
+        <p class="drag-note">拖动模型 · 滚轮缩放</p>
+      </section>
+
+      <section class="statement" id="story">
+        <p class="eyebrow">THE COLLECTION</p>
+        <h2>One Structure,<br />Seven Identities.</h2>
+        <p class="statement-copy">
+          在古代认知中，椅子即椅子，是一个功能明确、清晰的对象；而到了20世纪，正如艺术家 Joseph Kosuth的作品"One and Three Chairs"，事物被拆解为物理实体、视觉图像与语言定义三种属性；而在如今以计算为基础的技术语境中，关于事物“本质”的讨论被再次推进。基于张周捷实验室长期研究的MeshRare系列，算法在迭代中自然淘汰多余结构，每把椅子如同是在“基因选择”条件下，被推演而暂时稳定下来的一种结构状态。“一把椅子”，由此成为“无尽的椅子”。
+        </p>
+      </section>
+
+      <section class="selector-section" id="selector">
+        <div class="selector-heading">
+          <p class="eyebrow">SEVEN OBJECTS</p>
+          <h2>Explore the Collection</h2>
+          <p>点击作品图片，镜头会移动到对应模型。选择全系列图片返回完整陈列。</p>
+        </div>
+        <div class="chair-selector" id="chair-selector" aria-label="椅子图片选择">
+          <button class="selector-button collection-card active" type="button" data-chair="all">
+            <span class="card-image"><img src="./assets/chair-gallery/collection.png" alt="Endless Form 全系列椅子" /></span>
+            <span class="card-copy"><strong>Endless Form Collection</strong><small>FULL COLLECTION · 00</small></span>
+          </button>
+          <button class="selector-button" type="button" data-chair="0">
+            <span class="card-image"><img src="./assets/chair-gallery/chair-a3.png" alt="CY A3 椅子" /></span>
+            <span class="card-copy"><strong>CY A3</strong><small>OBJECT 01</small></span>
+          </button>
+          <button class="selector-button" type="button" data-chair="1">
+            <span class="card-image"><img src="./assets/chair-gallery/chair-a4.png" alt="CY A4 椅子" /></span>
+            <span class="card-copy"><strong>CY A4</strong><small>OBJECT 02</small></span>
+          </button>
+          <button class="selector-button" type="button" data-chair="2">
+            <span class="card-image"><img src="./assets/chair-gallery/chair-a2.png" alt="CY A2 椅子" /></span>
+            <span class="card-copy"><strong>CY A2</strong><small>OBJECT 03</small></span>
+          </button>
+          <button class="selector-button" type="button" data-chair="3">
+            <span class="card-image"><img src="./assets/chair-gallery/chair-a1.png" alt="CY A1 椅子" /></span>
+            <span class="card-copy"><strong>CY A1</strong><small>OBJECT 04</small></span>
+          </button>
+          <button class="selector-button" type="button" data-chair="4">
+            <span class="card-image"><img src="./assets/chair-gallery/chair-a7.png" alt="CY A7 椅子" /></span>
+            <span class="card-copy"><strong>CY A7</strong><small>OBJECT 05</small></span>
+          </button>
+          <button class="selector-button" type="button" data-chair="5">
+            <span class="card-image"><img src="./assets/chair-gallery/chair-a6.png" alt="CY A6 椅子" /></span>
+            <span class="card-copy"><strong>CY A6</strong><small>OBJECT 06</small></span>
+          </button>
+          <button class="selector-button" type="button" data-chair="6">
+            <span class="card-image"><img src="./assets/chair-gallery/chair-a5.png" alt="CY A5 椅子" /></span>
+            <span class="card-copy"><strong>CY A5</strong><small>OBJECT 07</small></span>
+          </button>
+        </div>
+      </section>
+
+      <section class="customizer-section" id="customize">
+        <div class="customizer-heading">
+          <p class="eyebrow">MADE BY YOU</p>
+          <h2>Build Your<br />Endless Form.</h2>
+          <p>以椅身为基础，选择椅背结构与钛合金电着色。拖动模型可自由查看组合细节。</p>
+        </div>
+
+        <div class="customizer-workspace">
+          <div class="customizer-stage">
+            <canvas id="custom-canvas" aria-label="定制椅子三维预览"></canvas>
+            <span class="custom-status" id="custom-status">正在载入定制组件...</span>
+            <span class="custom-drag-note">拖动旋转 · 滚轮缩放</span>
+          </div>
+
+          <div class="customizer-controls">
+            <div class="custom-summary">
+              <span>CURRENT CONFIGURATION</span>
+              <strong id="custom-summary">Back 01 · Pale Blue</strong>
+            </div>
+
+            <fieldset>
+              <legend>选择椅背 <span id="back-count">01 / 06</span></legend>
+              <div class="back-options">
+                <button class="option-button active" type="button" data-back="0"><span>01</span><strong>Back 01</strong></button>
+                <button class="option-button" type="button" data-back="1"><span>02</span><strong>Back 02</strong></button>
+                <button class="option-button" type="button" data-back="2"><span>03</span><strong>Back 03</strong></button>
+                <button class="option-button" type="button" data-back="3"><span>04</span><strong>Back 04</strong></button>
+                <button class="option-button" type="button" data-back="4"><span>05</span><strong>Back 05</strong></button>
+                <button class="option-button" type="button" data-back="5"><span>06</span><strong>Back 06</strong></button>
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend>钛合金电着色 <span>05 COLORS</span></legend>
+              <div class="color-options">
+                <button class="color-button active" type="button" data-color="#9fc9df" data-color-name="Pale Blue" aria-label="浅蓝色"><i style="--swatch:#9fc9df"></i><span>浅蓝色</span></button>
+                <button class="color-button" type="button" data-color="#ead2cf" data-color-name="Cream Pink" aria-label="奶油粉"><i style="--swatch:#ead2cf"></i><span>奶油粉</span></button>
+                <button class="color-button" type="button" data-color="#c9bee0" data-color-name="Soft Violet" aria-label="淡紫色"><i style="--swatch:#c9bee0"></i><span>淡紫色</span></button>
+                <button class="color-button" type="button" data-color="#294d78" data-color-name="Deep Blue" aria-label="深蓝色"><i style="--swatch:#294d78"></i><span>深蓝色</span></button>
+                <button class="color-button" type="button" data-color="#d8c39b" data-color-name="Pale Gold" aria-label="浅金色"><i style="--swatch:#d8c39b"></i><span>浅金色</span></button>
+              </div>
+            </fieldset>
+
+            <div class="quote-agent" aria-live="polite">
+              <div class="quote-agent-heading">
+                <div>
+                  <span>AUTO QUOTE AGENT</span>
+                  <strong>实时询价</strong>
+                </div>
+                <i></i>
+              </div>
+              <div class="quote-lines">
+                <div><span>Endless Form 基础款</span><strong>¥8,200</strong></div>
+                <div id="back-price-line"><span>椅背结构升级</span><strong>+ ¥0</strong></div>
+                <div id="color-price-line"><span>钛合金电着色</span><strong>+ ¥1,000</strong></div>
+              </div>
+              <div class="quote-total">
+                <span>当前自动报价</span>
+                <strong id="custom-price">¥9,200</strong>
+              </div>
+              <button class="order-button" id="order-button" type="button">现在下单</button>
+              <p class="order-status" id="order-status"></p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="closing">
+        <div>
+          <p class="eyebrow">AUTHORED IN BLENDER</p>
+          <h2>Original Textures,<br />Endless Expression.</h2>
+        </div>
+        <p>网页直接读取从 Blender 场景导出的 GLB 文件。所有作品沿用模型文件中的 UV、材质节点与贴图内容。</p>
+        <a class="text-link" href="#collection">返回顶部 <span>↑</span></a>
+      </section>
+    </main>
+
+    <footer>
+      <a class="wordmark" href="#collection">Endless Form</a>
+      <span>数字艺术实践 · 2026</span>
+      <span>七把椅子系列</span>
+    </footer>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./vendor/three/build/three.module.js",
+          "three/addons/": "./vendor/three/examples/jsm/"
+        }
+      }
+    </script>
+    <script type="module" src="./app.js?v=20260609"></script>
+  </body>
+</html>
