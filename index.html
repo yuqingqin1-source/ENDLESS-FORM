@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f3f0e9" />
     <title>Endless Form / Chair Collection</title>
-    <link rel="stylesheet" href="./styles.css?v=20260609-2" />
+    <link rel="stylesheet" href="./styles.css?v=20260613-4" />
   </head>
   <body>
     <header class="site-header">
@@ -24,9 +24,13 @@
           <canvas id="chair-canvas" aria-label="七把椅子三维系列"></canvas>
           <div class="model-status" id="model-status">正在载入七把椅子与原始贴图...</div>
         </div>
+        <button class="intro-enter hidden" id="intro-enter" type="button">
+          <strong>Endless Form</strong>
+          <span>开始探索</span>
+        </button>
         <div class="hero-copy">
           <p class="eyebrow">DIGITAL ART PRACTICE · 2026</p>
-          <h1>Endless Form</h1>
+          <h1>Mesh Rare</h1>
           <p class="hero-subtitle">同一种坐姿，七种不同的表面叙事。</p>
           <a class="pill-link" href="#selector">探索系列</a>
         </div>
@@ -87,7 +91,7 @@
         <div class="customizer-heading">
           <p class="eyebrow">MADE BY YOU</p>
           <h2>Build Your<br />Endless Form.</h2>
-          <p>以椅身为基础，选择椅背结构与钛合金电着色。拖动模型可自由查看组合细节。</p>
+          <p>以椅身为基础，选择不同的椅背结构、钛合金电着色与自定义材质，创造属于你的 Mesh Rare。</p>
         </div>
 
         <div class="customizer-workspace">
@@ -124,28 +128,46 @@
                 <button class="color-button" type="button" data-color="#294d78" data-color-name="Deep Blue" aria-label="深蓝色"><i style="--swatch:#294d78"></i><span>深蓝色</span></button>
                 <button class="color-button" type="button" data-color="#d8c39b" data-color-name="Pale Gold" aria-label="浅金色"><i style="--swatch:#d8c39b"></i><span>浅金色</span></button>
               </div>
+              <button class="color-remove remove-action" id="color-remove" type="button">
+                <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5"/></svg>
+                <span>移除颜色 · 恢复原始材质</span>
+              </button>
             </fieldset>
 
-            <div class="quote-agent" aria-live="polite">
-              <div class="quote-agent-heading">
-                <div>
-                  <span>AUTO QUOTE AGENT</span>
-                  <strong>实时询价</strong>
-                </div>
-                <i></i>
+            <fieldset class="texture-panel">
+              <legend>材质与纹理 <span>05 MATERIALS</span></legend>
+              <div class="material-options">
+                <button class="material-button" type="button" data-texture="./assets/material-presets/color-fabric.png" data-texture-name="彩色布"><i style="--texture:url('./assets/material-presets/color-fabric.png')"></i><span>彩色布</span></button>
+                <button class="material-button" type="button" data-texture="./assets/material-presets/color-fabric-2.png" data-texture-name="彩色布 2"><i style="--texture:url('./assets/material-presets/color-fabric-2.png')"></i><span>彩色布 2</span></button>
+                <button class="material-button" type="button" data-texture="./assets/material-presets/tech-wood.png" data-texture-name="科技木"><i style="--texture:url('./assets/material-presets/tech-wood.png')"></i><span>科技木</span></button>
+                <button class="material-button" type="button" data-texture="./assets/material-presets/tech-wood-2.png" data-texture-name="科技木 2"><i style="--texture:url('./assets/material-presets/tech-wood-2.png')"></i><span>科技木 2</span></button>
+                <button class="material-button" type="button" data-texture="./assets/material-presets/bronze.png" data-texture-name="青铜"><i style="--texture:url('./assets/material-presets/bronze.png')"></i><span>青铜</span></button>
               </div>
-              <div class="quote-lines">
-                <div><span>Endless Form 基础款</span><strong>¥8,200</strong></div>
-                <div id="back-price-line"><span>椅背结构升级</span><strong>+ ¥0</strong></div>
-                <div id="color-price-line"><span>钛合金电着色</span><strong>+ ¥1,000</strong></div>
+              <label class="texture-upload" id="texture-upload">
+                <input id="texture-input" type="file" accept="image/png,image/jpeg,image/webp" />
+                <span class="texture-preview" id="texture-preview"></span>
+                <span class="texture-copy">
+                  <strong id="texture-name">上传材质图片</strong>
+                  <small>JPG · PNG · WEBP</small>
+                </span>
+                <b>+</b>
+              </label>
+              <button class="texture-remove remove-action hidden" id="texture-remove" type="button">
+                <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5"/></svg>
+                <span>移除材质纹理</span>
+              </button>
+              <p class="texture-note">纹理仅应用于当前可着色区域，黑色框架与黑色块面保持不变。</p>
+            </fieldset>
+
+            <div class="poster-export">
+              <div>
+                <span>CREATE YOUR POSTER</span>
+                <strong>导出专属海报</strong>
               </div>
-              <div class="quote-total">
-                <span>当前自动报价</span>
-                <strong id="custom-price">¥9,200</strong>
-              </div>
-              <button class="order-button" id="order-button" type="button">现在下单</button>
-              <p class="order-status" id="order-status"></p>
+              <button id="poster-export" type="button">导出 PNG</button>
+              <p id="poster-status" aria-live="polite">将当前模型、视角与材质导出为高分辨率海报。</p>
             </div>
+
           </div>
         </div>
       </section>
@@ -155,7 +177,7 @@
           <p class="eyebrow">AUTHORED IN BLENDER</p>
           <h2>Original Textures,<br />Endless Expression.</h2>
         </div>
-        <p>网页直接读取从 Blender 场景导出的 GLB 文件。所有作品沿用模型文件中的 UV、材质节点与贴图内容。</p>
+        <p>张周捷的作品带有鲜明的独立性、实验性和未来性，探索数字形态的演化及制造。张周捷认为，数字语境中的事物可以像自然界万物般生长变化，他所做的即是寻找其中的原理和迹象。他的作品主要关注逻辑的极简性、结果的多样性和不可预见性，这一切都源自他对自然的理解。</p>
         <a class="text-link" href="#collection">返回顶部 <span>↑</span></a>
       </section>
     </main>
@@ -174,6 +196,6 @@
         }
       }
     </script>
-    <script type="module" src="./app.js?v=20260609"></script>
+    <script type="module" src="./app.js?v=20260614-2"></script>
   </body>
 </html>

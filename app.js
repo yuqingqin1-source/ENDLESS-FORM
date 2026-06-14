@@ -6,16 +6,25 @@ const canvas = document.querySelector("#chair-canvas");
 const status = document.querySelector("#model-status");
 const customCanvas = document.querySelector("#custom-canvas");
 const customStatus = document.querySelector("#custom-status");
+const introEnter = document.querySelector("#intro-enter");
+const heroCopy = document.querySelector(".hero-copy");
+const introSound = new Audio("./assets/audio/intro-sound.mp3");
+introSound.preload = "auto";
+introSound.volume = 0.72;
+const chairNames = ["CY A3", "CY A4", "CY A2", "CY A1", "CY A7", "CY A6", "CY A5"];
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xf3f3f3);
 scene.fog = new THREE.Fog(0xf3f3f3, 38, 68);
 
 const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 100);
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setClearColor(0x000000, 0);
+const introPixelRatio = Math.min(window.devicePixelRatio, 1);
+const detailPixelRatio = Math.min(window.devicePixelRatio, 1.5);
+renderer.setPixelRatio(introPixelRatio);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.55;
+const finalExposure = 1.55;
+renderer.toneMappingExposure = finalExposure;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -33,21 +42,40 @@ scene.add(collection);
 const chairGroups = [];
 const desiredTarget = new THREE.Vector3();
 const desiredPosition = new THREE.Vector3();
+let chairNameMesh = null;
+let chairNameFadeStart = 0;
 let cameraInitialized = false;
 let cameraTransitionActive = false;
+const heroLights = [];
+const introBackground = new THREE.Color(0x000000);
+const finalBackground = new THREE.Color(0xf3f3f3);
+const introStartPosition = new THREE.Vector3();
+const introStartTarget = new THREE.Vector3();
+let introStartTime = 0;
+let introActive = false;
+let introReady = false;
+let detailResolutionApplied = false;
+let heroCopyVisible = false;
+const introDelay = 450;
+const introDuration = 6000;
 const customBacks = [];
 const customTintMaterials = [];
 let selectedBack = 0;
 let selectedColorName = "Pale Blue";
 let selectedColorIndex = 0;
+let selectedColorValue = "#9fc9df";
+let colorEnabled = true;
+let customTexture = null;
+let customTextureUrl = "";
 
 controls.addEventListener("start", () => {
+  finishIntro();
   cameraTransitionActive = false;
 });
 
 addLights();
 loadCollection();
-initCustomizer();
+deferCustomizer();
 bindSelector();
 document.querySelector(".menu-button").addEventListener("click", () => {
   document.querySelector("#selector").scrollIntoView({ behavior: "smooth" });
@@ -55,32 +83,38 @@ document.querySelector(".menu-button").addEventListener("click", () => {
 resize();
 animate();
 window.addEventListener("resize", resize);
+introEnter.addEventListener("click", beginIntro);
 
 function addLights() {
-  scene.add(new THREE.AmbientLight(0xffffff, 2.1));
-  scene.add(new THREE.HemisphereLight(0xffffff, 0xd8d8d4, 3.4));
+  addHeroLight(new THREE.AmbientLight(0xffffff, 2.1));
+  addHeroLight(new THREE.HemisphereLight(0xffffff, 0xd8d8d4, 3.4));
 
   const key = new THREE.DirectionalLight(0xffffff, 5.2);
   key.position.set(-7, 14, 12);
   key.castShadow = true;
-  key.shadow.mapSize.set(2048, 2048);
+  key.shadow.mapSize.set(1024, 1024);
   key.shadow.camera.left = -22;
   key.shadow.camera.right = 22;
   key.shadow.camera.top = 15;
   key.shadow.camera.bottom = -8;
-  scene.add(key);
+  addHeroLight(key);
   const fill = new THREE.DirectionalLight(0xffffff, 4.2);
   fill.position.set(8, 8, 12);
-  scene.add(fill);
+  addHeroLight(fill);
 
   const rim = new THREE.DirectionalLight(0xf1f5ff, 3.2);
   rim.position.set(0, 7, -10);
-  scene.add(rim);
+  addHeroLight(rim);
 
   const front = new THREE.PointLight(0xffffff, 45, 45, 1.6);
   front.position.set(0, 5, 12);
-  scene.add(front);
+  addHeroLight(front);
+}
 
+function addHeroLight(light) {
+  light.userData.finalIntensity = light.intensity;
+  heroLights.push(light);
+  scene.add(light);
 }
 
 function loadCollection() {
@@ -96,12 +130,38 @@ function loadCollection() {
     normalizeCollection(source);
     buildChairGroups(source);
     addFloor();
+    renderer.shadowMap.autoUpdate = false;
+    renderer.shadowMap.needsUpdate = true;
     showAll();
     status.classList.add("hidden");
   }, undefined, (error) => {
     console.error(error);
     status.textContent = "模型加载失败，请通过本地服务器打开页面。";
   });
+}
+
+function deferCustomizer() {
+  let initialized = false;
+  const customizerSection = document.querySelector("#customize");
+  let proximityTimer = 0;
+  const initializeWhenNear = () => {
+    if (initialized || customizerSection.getBoundingClientRect().top > window.innerHeight + 800) return;
+    initializeCustomizer();
+  };
+  const initializeCustomizer = () => {
+    if (initialized) return;
+    initialized = true;
+    window.removeEventListener("scroll", initializeWhenNear);
+    window.clearInterval(proximityTimer);
+    initCustomizer();
+    resize();
+  };
+  window.addEventListener("scroll", initializeWhenNear, { passive: true });
+  document.querySelectorAll('a[href="#customize"]').forEach((link) => {
+    link.addEventListener("click", initializeCustomizer, { once: true });
+  });
+  proximityTimer = window.setInterval(initializeWhenNear, 250);
+  initializeWhenNear();
 }
 
 function prepareMaterial(material) {
@@ -153,11 +213,68 @@ function bindSelector() {
   document.querySelectorAll("[data-chair]").forEach((button) => {
     button.addEventListener("click", () => {
       document.querySelectorAll("[data-chair]").forEach((item) => item.classList.toggle("active", item === button));
-      if (button.dataset.chair === "all") showAll();
-      else focusChair(Number(button.dataset.chair));
+      if (button.dataset.chair === "all") {
+        hideChairName();
+        showAll();
+      } else {
+        const index = Number(button.dataset.chair);
+        showChairName(chairNames[index], index);
+        focusChair(index);
+      }
       document.querySelector("#collection").scrollIntoView({ behavior: "smooth" });
     });
   });
+}
+
+function showChairName(name, index) {
+  const chair = chairGroups[index];
+  if (!chair) return;
+  if (chairNameMesh) {
+    scene.remove(chairNameMesh);
+    chairNameMesh.geometry.dispose();
+    chairNameMesh.material.map.dispose();
+    chairNameMesh.material.dispose();
+  }
+
+  const labelCanvas = document.createElement("canvas");
+  labelCanvas.width = 2048;
+  labelCanvas.height = 512;
+  const context = labelCanvas.getContext("2d");
+  context.clearRect(0, 0, labelCanvas.width, labelCanvas.height);
+  context.fillStyle = "#c9c9c5";
+  context.font = '400 360px "Gilroy", Arial, sans-serif';
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  drawTrackedText(context, name, labelCanvas.width / 2, labelCanvas.height / 2 + 20, 5);
+
+  const texture = new THREE.CanvasTexture(labelCanvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const size = chair.box.getSize(new THREE.Vector3());
+  const center = chair.box.getCenter(new THREE.Vector3());
+  const width = Math.max(size.x * 4.4, 6.8);
+  chairNameMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(width, width * 0.25),
+    new THREE.MeshBasicMaterial({ map: texture, transparent: true, opacity: 0, depthWrite: false, toneMapped: false })
+  );
+  chairNameMesh.position.set(center.x, center.y * 1.12, chair.box.min.z - 0.72);
+  scene.add(chairNameMesh);
+  chairNameFadeStart = performance.now() + 350;
+}
+
+function drawTrackedText(context, text, centerX, centerY, tracking) {
+  const characters = [...text];
+  const width = characters.reduce((sum, character) => sum + context.measureText(character).width, 0) +
+    tracking * Math.max(0, characters.length - 1);
+  let x = centerX - width / 2;
+  context.textAlign = "left";
+  characters.forEach((character) => {
+    context.fillText(character, x, centerY);
+    x += context.measureText(character).width + tracking;
+  });
+}
+
+function hideChairName() {
+  if (chairNameMesh) chairNameMesh.visible = false;
 }
 
 function initCustomizer() {
@@ -167,8 +284,8 @@ function initCustomizer() {
   const customCamera = new THREE.PerspectiveCamera(31, 1, 0.1, 100);
   customCamera.position.set(4.4, 3.1, 6.8);
 
-  const customRenderer = new THREE.WebGLRenderer({ canvas: customCanvas, antialias: true });
-  customRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  const customRenderer = new THREE.WebGLRenderer({ canvas: customCanvas, antialias: true, preserveDrawingBuffer: true });
+  customRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
   customRenderer.outputColorSpace = THREE.SRGBColorSpace;
   customRenderer.toneMapping = THREE.ACESFilmicToneMapping;
   customRenderer.toneMappingExposure = 1.28;
@@ -218,6 +335,7 @@ function initCustomizer() {
         clone.userData.originalColor = clone.color.clone();
         clone.userData.originalMetalness = clone.metalness;
         clone.userData.originalRoughness = clone.roughness;
+        clone.userData.originalMap = clone.map;
         clone.userData.tintableMetal = Boolean(clone.metalnessMap) || clone.metalness >= 0.35;
         customTintMaterials.push(clone);
         return clone;
@@ -233,6 +351,7 @@ function initCustomizer() {
     const scaledBox = new THREE.Box3().setFromObject(source);
     const center = scaledBox.getCenter(new THREE.Vector3());
     source.position.set(-center.x, -scaledBox.min.y, -center.z);
+    source.updateMatrixWorld(true);
 
     for (let index = 1; index <= 6; index += 1) {
       const back = source.getObjectByName(`custom_back_${index}`);
@@ -267,28 +386,59 @@ function initCustomizer() {
       document.querySelectorAll("[data-back]").forEach((item) => item.classList.toggle("active", item === button));
       document.querySelector("#back-count").textContent = `${String(selectedBack + 1).padStart(2, "0")} / 06`;
       updateCustomSummary();
-      updateCustomQuote();
     });
   });
 
   document.querySelectorAll("[data-color]").forEach((button) => {
     button.addEventListener("click", () => {
       selectedColorName = button.dataset.colorName;
+      selectedColorValue = button.dataset.color;
+      colorEnabled = true;
       selectedColorIndex = [...document.querySelectorAll("[data-color]")].indexOf(button);
       applyCustomColor(button.dataset.color);
       document.querySelectorAll("[data-color]").forEach((item) => item.classList.toggle("active", item === button));
+      document.querySelector("#color-remove").classList.remove("active");
       updateCustomSummary();
-      updateCustomQuote();
     });
   });
 
-  document.querySelector("#order-button").addEventListener("click", () => {
-    const total = calculateCustomQuote().total.toLocaleString("zh-CN");
-    document.querySelector("#order-status").textContent =
-      `已生成订单意向：Back ${String(selectedBack + 1).padStart(2, "0")} · ${selectedColorName} · ¥${total}。`;
+  document.querySelector("#color-remove").addEventListener("click", () => {
+    colorEnabled = false;
+    selectedColorName = "Original";
+    document.querySelectorAll("[data-color]").forEach((item) => item.classList.remove("active"));
+    document.querySelector("#color-remove").classList.add("active");
+    applyCustomColor(selectedColorValue);
+    updateCustomSummary();
   });
 
-  window.customView = { scene: customScene, camera: customCamera, renderer: customRenderer, controls: customControls };
+  document.querySelector("#texture-input").addEventListener("change", (event) => {
+    const [file] = event.target.files;
+    if (!file) return;
+    document.querySelectorAll("[data-texture]").forEach((item) => item.classList.remove("active"));
+    loadCustomTexture(file);
+  });
+
+  document.querySelectorAll("[data-texture]").forEach((button) => {
+    button.addEventListener("click", () => {
+      loadPresetTexture(button.dataset.texture, button.dataset.textureName);
+      document.querySelectorAll("[data-texture]").forEach((item) => item.classList.toggle("active", item === button));
+    });
+  });
+
+  document.querySelector("#texture-remove").addEventListener("click", clearCustomTexture);
+  document.querySelector("#poster-export").addEventListener("click", exportPoster);
+
+  window.customView = {
+    scene: customScene,
+    camera: customCamera,
+    renderer: customRenderer,
+    controls: customControls,
+    root: customRoot,
+    active: false
+  };
+  new IntersectionObserver(([entry]) => {
+    window.customView.active = entry.isIntersecting;
+  }, { rootMargin: "160px" }).observe(customCanvas);
 }
 
 function applyCustomColor(colorValue) {
@@ -300,11 +450,127 @@ function applyCustomColor(colorValue) {
     material.emissive.set(0x000000);
     material.emissiveMap = null;
     material.emissiveIntensity = 0;
-    if (material.userData.tintableMetal) {
+    if (material.userData.tintableMetal && colorEnabled) {
       material.color.multiply(tint.clone().lerp(new THREE.Color(0xffffff), 0.38));
+    }
+    if (material.userData.tintableMetal) {
+      material.map = material.userData.customMaskedMap || material.userData.originalMap;
     }
     material.needsUpdate = true;
   });
+}
+
+function loadCustomTexture(file) {
+  if (customTextureUrl) URL.revokeObjectURL(customTextureUrl);
+  customTextureUrl = URL.createObjectURL(file);
+  new THREE.TextureLoader().load(customTextureUrl, (texture) => {
+    customTexture?.dispose();
+    customTexture = texture;
+    customTexture.colorSpace = THREE.SRGBColorSpace;
+    customTexture.wrapS = THREE.RepeatWrapping;
+    customTexture.wrapT = THREE.RepeatWrapping;
+    customTexture.repeat.set(1.5, 1.5);
+    customTexture.flipY = false;
+    customTexture.needsUpdate = true;
+    document.querySelector("#texture-preview").style.backgroundImage = `url("${customTextureUrl}")`;
+    document.querySelector("#texture-name").textContent = file.name;
+    document.querySelector("#texture-remove").classList.remove("hidden");
+    applyMaskedTextureToMaterials();
+  });
+}
+
+function loadPresetTexture(url, name) {
+  if (customTextureUrl) URL.revokeObjectURL(customTextureUrl);
+  customTextureUrl = "";
+  new THREE.TextureLoader().load(url, (texture) => {
+    setActiveTexture(texture);
+    document.querySelector("#texture-input").value = "";
+    document.querySelector("#texture-preview").style.backgroundImage = "";
+    document.querySelector("#texture-name").textContent = "上传材质图片";
+    document.querySelector("#texture-remove").classList.remove("hidden");
+  });
+}
+
+function setActiveTexture(texture) {
+  customTexture?.dispose();
+  customTexture = texture;
+  customTexture.colorSpace = THREE.SRGBColorSpace;
+  customTexture.wrapS = THREE.RepeatWrapping;
+  customTexture.wrapT = THREE.RepeatWrapping;
+  customTexture.repeat.set(1.5, 1.5);
+  customTexture.flipY = false;
+  customTexture.needsUpdate = true;
+  applyMaskedTextureToMaterials();
+}
+
+function clearCustomTexture() {
+  customTexture?.dispose();
+  customTexture = null;
+  customTintMaterials.forEach((material) => {
+    material.userData.customMaskedMap?.dispose();
+    material.userData.customMaskedMap = null;
+  });
+  if (customTextureUrl) URL.revokeObjectURL(customTextureUrl);
+  customTextureUrl = "";
+  document.querySelector("#texture-input").value = "";
+  document.querySelector("#texture-preview").style.backgroundImage = "";
+  document.querySelector("#texture-name").textContent = "上传材质图片";
+  document.querySelector("#texture-remove").classList.add("hidden");
+  document.querySelectorAll("[data-texture]").forEach((item) => item.classList.remove("active"));
+  applyCustomColor(selectedColorValue);
+}
+
+function applyMaskedTextureToMaterials() {
+  customTintMaterials.forEach((material) => {
+    material.userData.customMaskedMap?.dispose();
+    material.userData.customMaskedMap = createMaskedTexture(material.userData.originalMap, customTexture);
+  });
+  applyCustomColor(selectedColorValue);
+}
+
+function createMaskedTexture(originalTexture, uploadedTexture) {
+  if (!uploadedTexture?.image) return null;
+  if (!originalTexture?.image) {
+    const texture = uploadedTexture.clone();
+    texture.needsUpdate = true;
+    return texture;
+  }
+
+  const width = Math.min(originalTexture.image.width || 1024, 1024);
+  const height = Math.min(originalTexture.image.height || 1024, 1024);
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  context.drawImage(originalTexture.image, 0, 0, width, height);
+  const originalPixels = context.getImageData(0, 0, width, height);
+
+  context.clearRect(0, 0, width, height);
+  const pattern = context.createPattern(uploadedTexture.image, "repeat");
+  context.fillStyle = pattern;
+  context.fillRect(0, 0, width, height);
+  const uploadedPixels = context.getImageData(0, 0, width, height);
+
+  for (let index = 0; index < originalPixels.data.length; index += 4) {
+    const luminance =
+      originalPixels.data[index] * 0.2126 +
+      originalPixels.data[index + 1] * 0.7152 +
+      originalPixels.data[index + 2] * 0.0722;
+    if (luminance > 105) {
+      originalPixels.data[index] = uploadedPixels.data[index];
+      originalPixels.data[index + 1] = uploadedPixels.data[index + 1];
+      originalPixels.data[index + 2] = uploadedPixels.data[index + 2];
+    }
+  }
+
+  context.putImageData(originalPixels, 0, 0);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.flipY = originalTexture.flipY;
+  texture.wrapS = originalTexture.wrapS;
+  texture.wrapT = originalTexture.wrapT;
+  texture.needsUpdate = true;
+  return texture;
 }
 
 function addStudioPanel(targetScene, position, size, color, rotation) {
@@ -318,22 +584,107 @@ function addStudioPanel(targetScene, position, size, color, rotation) {
 }
 
 function updateCustomSummary() {
-  document.querySelector("#custom-summary").textContent = `Back ${String(selectedBack + 1).padStart(2, "0")} · ${selectedColorName}`;
+  document.querySelector("#custom-summary").textContent =
+    `Back ${String(selectedBack + 1).padStart(2, "0")} · ${selectedColorName}`;
 }
 
-function calculateCustomQuote() {
-  const base = 8200;
-  const backUpgrade = selectedBack === 0 ? 0 : 2000;
-  const colorUpgrade = 1000;
-  return { base, backUpgrade, colorUpgrade, total: base + backUpgrade + colorUpgrade };
+async function exportPoster() {
+  const button = document.querySelector("#poster-export");
+  const statusElement = document.querySelector("#poster-status");
+  const view = window.customView;
+  if (!view || !customBacks.length) {
+    statusElement.textContent = "模型仍在载入，请稍后再试。";
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = "生成中...";
+  statusElement.textContent = "正在渲染高分辨率海报...";
+
+  try {
+    await document.fonts.ready;
+    const signature = await loadImage("./assets/poster/signature.png");
+    const previousSize = view.renderer.getSize(new THREE.Vector2());
+    const previousPixelRatio = view.renderer.getPixelRatio();
+    const previousAspect = view.camera.aspect;
+    const previousBackground = view.scene.background;
+    const posterBackground = new THREE.Color(0xf2f2f0);
+
+    view.renderer.setPixelRatio(1);
+    view.renderer.setSize(1800, 1800, false);
+    view.camera.aspect = 1;
+    view.camera.updateProjectionMatrix();
+    view.scene.background = posterBackground;
+    view.renderer.render(view.scene, view.camera);
+
+    const poster = document.createElement("canvas");
+    poster.width = 1800;
+    poster.height = 2400;
+    const context = poster.getContext("2d");
+    context.fillStyle = "#f2f2f0";
+    context.fillRect(0, 0, poster.width, poster.height);
+
+    context.fillStyle = "#111111";
+    context.textBaseline = "alphabetic";
+    context.textAlign = "left";
+    context.font = '400 40px "Gilroy", Arial, sans-serif';
+    context.fillText("Endless Form", 122, 138);
+    context.font = '400 16px "Gilroy", Arial, sans-serif';
+    drawTrackedText(context, "DIGITAL ART PRACTICE · 2026", 1500, 138, 5);
+
+    context.fillStyle = "rgba(17,17,17,.25)";
+    context.fillRect(122, 190, 1556, 2);
+
+    context.fillStyle = "#111111";
+    context.font = '400 250px "Gilroy", Arial, sans-serif';
+    context.fillText("Mesh Rare", 112, 530);
+    context.font = '400 38px "Gilroy", "PingFang SC", Arial, sans-serif';
+    context.fillText("我们，生而不同。", 150, 660);
+
+    // Keep the model clear of the headline and slogan so every character
+    // remains fully readable.
+    context.drawImage(customCanvas, 180, 680, 1440, 1440);
+
+    context.fillStyle = "#111111";
+    context.font = '400 18px "Gilroy", Arial, sans-serif';
+    drawTrackedText(context, `BACK ${String(selectedBack + 1).padStart(2, "0")} · ${selectedColorName.toUpperCase()}`, 420, 1995, 3);
+    context.drawImage(signature, 1135, 1875, 480, 194);
+    context.fillStyle = "rgba(17,17,17,.25)";
+    context.fillRect(122, 2070, 1556, 2);
+    context.fillStyle = "#111111";
+    context.font = '400 28px "Gilroy", Arial, sans-serif';
+    context.fillText("ONE STRUCTURE, ENDLESS IDENTITIES.", 122, 2170);
+    context.font = '400 17px "Gilroy", Arial, sans-serif';
+    context.fillText("MESH RARE · CUSTOM OBJECT", 122, 2240);
+
+    view.scene.background = previousBackground;
+    view.renderer.setPixelRatio(previousPixelRatio);
+    view.renderer.setSize(previousSize.x, previousSize.y, false);
+    view.camera.aspect = previousAspect;
+    view.camera.updateProjectionMatrix();
+    view.renderer.render(view.scene, view.camera);
+
+    const link = document.createElement("a");
+    link.download = `mesh-rare-back-${String(selectedBack + 1).padStart(2, "0")}.png`;
+    link.href = poster.toDataURL("image/png");
+    link.click();
+    statusElement.textContent = "海报已生成并下载。";
+  } catch (error) {
+    console.error(error);
+    statusElement.textContent = "海报生成失败，请重试。";
+  } finally {
+    button.disabled = false;
+    button.textContent = "导出 PNG";
+  }
 }
 
-function updateCustomQuote() {
-  const quote = calculateCustomQuote();
-  document.querySelector("#back-price-line strong").textContent = `+ ¥${quote.backUpgrade.toLocaleString("zh-CN")}`;
-  document.querySelector("#color-price-line strong").textContent = `+ ¥${quote.colorUpgrade.toLocaleString("zh-CN")}`;
-  document.querySelector("#custom-price").textContent = `¥${quote.total.toLocaleString("zh-CN")}`;
-  document.querySelector("#order-status").textContent = "";
+function loadImage(url) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = url;
+  });
 }
 
 function showAll() {
@@ -343,15 +694,114 @@ function showAll() {
   desiredTarget.set(center.x, center.y * 0.65, center.z);
   desiredPosition.set(center.x, Math.max(6.6, size.y * 1.68), Math.max(25.8, size.x * 0.9));
   if (!cameraInitialized) {
-    camera.position.copy(desiredPosition);
-    controls.target.copy(desiredTarget);
+    startIntro();
     cameraInitialized = true;
     return;
   }
   cameraTransitionActive = true;
 }
 
+function startIntro() {
+  const centerChair = chairGroups[Math.floor(chairGroups.length / 2)];
+  if (!centerChair) {
+    camera.position.copy(desiredPosition);
+    controls.target.copy(desiredTarget);
+    return;
+  }
+
+  const center = centerChair.box.getCenter(new THREE.Vector3());
+  const size = centerChair.box.getSize(new THREE.Vector3());
+  introStartTarget.set(center.x, center.y * 0.94, center.z);
+  introStartPosition.set(center.x, center.y * 0.92, center.z + Math.max(2.25, size.y * 0.82));
+
+  // Warm up every chair, material, texture and the final-view shadow map before
+  // the animation clock starts, while the loading state still covers the stage.
+  camera.position.copy(desiredPosition);
+  controls.target.copy(desiredTarget);
+  scene.background = finalBackground.clone();
+  renderer.toneMappingExposure = finalExposure;
+  heroLights.forEach((light) => {
+    light.intensity = light.userData.finalIntensity;
+  });
+  const frustumCullStates = [];
+  collection.traverse((node) => {
+    if (!node.isMesh) return;
+    frustumCullStates.push([node, node.frustumCulled]);
+    node.frustumCulled = false;
+  });
+  renderer.compile(scene, camera);
+  renderer.shadowMap.needsUpdate = true;
+  renderer.render(scene, camera);
+  frustumCullStates.forEach(([node, frustumCulled]) => {
+    node.frustumCulled = frustumCulled;
+  });
+
+  camera.position.copy(introStartPosition);
+  controls.target.copy(introStartTarget);
+  scene.background = introBackground.clone();
+  renderer.toneMappingExposure = 0.03;
+  heroLights.forEach((light) => {
+    light.intensity = 0;
+  });
+  renderer.render(scene, camera);
+  introReady = true;
+  introEnter.classList.remove("hidden");
+}
+
+function updateIntro(now) {
+  const progress = THREE.MathUtils.clamp((now - introStartTime - introDelay) / introDuration, 0, 1);
+  const eased = progress * progress * (3 - 2 * progress);
+  const lightProgress = Math.pow(eased, 1.35);
+  if (!heroCopyVisible && progress >= 0.3) {
+    heroCopyVisible = true;
+    heroCopy.classList.add("visible");
+  }
+
+  camera.position.lerpVectors(introStartPosition, desiredPosition, eased);
+  controls.target.lerpVectors(introStartTarget, desiredTarget, eased);
+  scene.background.copy(introBackground).lerp(finalBackground, lightProgress);
+  renderer.toneMappingExposure = THREE.MathUtils.lerp(0.03, finalExposure, lightProgress);
+  heroLights.forEach((light) => {
+    light.intensity = light.userData.finalIntensity * lightProgress;
+  });
+
+  if (progress >= 1) finishIntro();
+}
+
+function finishIntro() {
+  if (!introActive) return;
+  introActive = false;
+  scene.background = finalBackground.clone();
+  renderer.toneMappingExposure = finalExposure;
+  heroLights.forEach((light) => {
+    light.intensity = light.userData.finalIntensity;
+  });
+  if (!heroCopyVisible) {
+    heroCopyVisible = true;
+    heroCopy.classList.add("visible");
+  }
+  window.requestAnimationFrame(applyDetailResolution);
+}
+
+function beginIntro() {
+  if (!introReady || introActive) return;
+  introReady = false;
+  introEnter.classList.add("hidden");
+  introSound.currentTime = 0;
+  introSound.play().catch(() => {});
+  introStartTime = performance.now();
+  introActive = true;
+}
+
+function applyDetailResolution() {
+  if (detailResolutionApplied) return;
+  detailResolutionApplied = true;
+  renderer.setPixelRatio(detailPixelRatio);
+  resize();
+}
+
 function focusChair(index) {
+  finishIntro();
   const chair = chairGroups[index];
   if (!chair) return;
   const center = chair.box.getCenter(new THREE.Vector3());
@@ -378,7 +828,14 @@ function resize() {
 }
 
 function animate() {
-  if (cameraTransitionActive) {
+  const now = performance.now();
+  if (chairNameMesh?.visible && chairNameFadeStart) {
+    chairNameMesh.material.opacity = THREE.MathUtils.smoothstep((now - chairNameFadeStart) / 1200, 0, 1) * 0.72;
+  }
+  if (introActive) {
+    updateIntro(now);
+  }
+  if (cameraTransitionActive && !introActive) {
     camera.position.lerp(desiredPosition, 0.065);
     controls.target.lerp(desiredTarget, 0.075);
 
@@ -393,7 +850,7 @@ function animate() {
   }
   controls.update();
   renderer.render(scene, camera);
-  if (window.customView) {
+  if (window.customView?.active) {
     window.customView.controls.update();
     window.customView.renderer.render(window.customView.scene, window.customView.camera);
   }

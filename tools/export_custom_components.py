@@ -9,7 +9,7 @@ BODY_NAME = "椅身"
 BACK_NAMES = [f"背部{index}" for index in range(1, 7)]
 BACK_FINE_TUNING = {
     "背部2": (0.0, 0.0, -0.04),
-    "背部5": (0.0, 0.07, 0.0),
+    "背部5": (0.0, 0.06, -0.03),
 }
 
 bpy.ops.object.select_all(action="DESELECT")
