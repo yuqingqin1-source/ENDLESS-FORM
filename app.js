@@ -61,12 +61,27 @@ const introDuration = 6000;
 const customBacks = [];
 const customTintMaterials = [];
 let selectedBack = 0;
-let selectedColorName = "Pale Blue";
+let selectedColorName = "Original";
 let selectedColorIndex = 0;
 let selectedColorValue = "#9fc9df";
 let colorEnabled = true;
 let customTexture = null;
 let customTextureUrl = "";
+let materialEditorTexture = null;
+let posterPreviewUrl = "";
+let posterModelSnapshot = null;
+let posterNameValue = "Mesh Rare";
+let posterNameUpdateTimer = 0;
+let posterNameUpdateToken = 0;
+const customSymmetryBounds = new THREE.Vector4(0, 1, 0, 1);
+const materialGradient = {
+  activeId: 1,
+  nextId: 3,
+  stops: [
+    { id: 1, x: 0.18, y: 0.28, color: "#6fb7d6" },
+    { id: 2, x: 0.86, y: 0.74, color: "#f0c5a8" }
+  ]
+};
 
 controls.addEventListener("start", () => {
   finishIntro();
@@ -273,6 +288,16 @@ function drawTrackedText(context, text, centerX, centerY, tracking) {
   });
 }
 
+function drawPosterTitle(context, title, x, y, maxWidth) {
+  let fontSize = 250;
+  const safeTitle = title || "Mesh Rare";
+  do {
+    context.font = `400 ${fontSize}px "Gilroy", Arial, sans-serif`;
+    fontSize -= 8;
+  } while (context.measureText(safeTitle).width > maxWidth && fontSize > 84);
+  context.fillText(safeTitle, x, y);
+}
+
 function hideChairName() {
   if (chairNameMesh) chairNameMesh.visible = false;
 }
@@ -295,6 +320,8 @@ function initCustomizer() {
   const customControls = new OrbitControls(customCamera, customCanvas);
   customControls.enableDamping = true;
   customControls.dampingFactor = 0.055;
+  customControls.autoRotate = true;
+  customControls.autoRotateSpeed = 0.65;
   customControls.minDistance = 3.2;
   customControls.maxDistance = 10;
   customControls.minPolarAngle = Math.PI * 0.08;
@@ -335,8 +362,11 @@ function initCustomizer() {
         clone.userData.originalColor = clone.color.clone();
         clone.userData.originalMetalness = clone.metalness;
         clone.userData.originalRoughness = clone.roughness;
-        clone.userData.originalMap = clone.map;
+        clone.userData.originalMap = clone.map || createSolidColorTexture(clone.color);
         clone.userData.tintableMetal = Boolean(clone.metalnessMap) || clone.metalness >= 0.35;
+        clone.userData.textureEligible = shouldProjectTexture(clone);
+        clone.map = clone.userData.originalMap;
+        prepareSymmetryProjectionMaterial(clone);
         customTintMaterials.push(clone);
         return clone;
       });
@@ -352,6 +382,7 @@ function initCustomizer() {
     const center = scaledBox.getCenter(new THREE.Vector3());
     source.position.set(-center.x, -scaledBox.min.y, -center.z);
     source.updateMatrixWorld(true);
+    updateCustomSymmetryBounds(source);
 
     for (let index = 1; index <= 6; index += 1) {
       const back = source.getObjectByName(`custom_back_${index}`);
@@ -360,7 +391,6 @@ function initCustomizer() {
     customBacks.forEach((back, index) => {
       back.visible = index === selectedBack;
     });
-
     customRoot.add(source);
     applyCustomColor("#9fc9df");
     customStatus.classList.add("hidden");
@@ -389,28 +419,6 @@ function initCustomizer() {
     });
   });
 
-  document.querySelectorAll("[data-color]").forEach((button) => {
-    button.addEventListener("click", () => {
-      selectedColorName = button.dataset.colorName;
-      selectedColorValue = button.dataset.color;
-      colorEnabled = true;
-      selectedColorIndex = [...document.querySelectorAll("[data-color]")].indexOf(button);
-      applyCustomColor(button.dataset.color);
-      document.querySelectorAll("[data-color]").forEach((item) => item.classList.toggle("active", item === button));
-      document.querySelector("#color-remove").classList.remove("active");
-      updateCustomSummary();
-    });
-  });
-
-  document.querySelector("#color-remove").addEventListener("click", () => {
-    colorEnabled = false;
-    selectedColorName = "Original";
-    document.querySelectorAll("[data-color]").forEach((item) => item.classList.remove("active"));
-    document.querySelector("#color-remove").classList.add("active");
-    applyCustomColor(selectedColorValue);
-    updateCustomSummary();
-  });
-
   document.querySelector("#texture-input").addEventListener("change", (event) => {
     const [file] = event.target.files;
     if (!file) return;
@@ -426,7 +434,15 @@ function initCustomizer() {
   });
 
   document.querySelector("#texture-remove").addEventListener("click", clearCustomTexture);
+  bindMaterialEditor();
   document.querySelector("#poster-export").addEventListener("click", exportPoster);
+  document.querySelector("#poster-download").addEventListener("click", downloadPosterPreview);
+  document.querySelector("#poster-close").addEventListener("click", closePosterPreview);
+  document.querySelector("#poster-close-icon").addEventListener("click", closePosterPreview);
+  document.querySelector("#poster-name-input").addEventListener("input", updatePosterName);
+  document.querySelector("#poster-modal").addEventListener("click", (event) => {
+    if (event.target.id === "poster-modal") closePosterPreview();
+  });
 
   window.customView = {
     scene: customScene,
@@ -444,6 +460,7 @@ function initCustomizer() {
 function applyCustomColor(colorValue) {
   const tint = new THREE.Color(colorValue);
   customTintMaterials.forEach((material) => {
+    updateSymmetryProjectionUniforms(material);
     material.color.copy(material.userData.originalColor);
     material.metalness = material.userData.originalMetalness;
     material.roughness = material.userData.originalRoughness;
@@ -453,8 +470,8 @@ function applyCustomColor(colorValue) {
     if (material.userData.tintableMetal && colorEnabled) {
       material.color.multiply(tint.clone().lerp(new THREE.Color(0xffffff), 0.38));
     }
-    if (material.userData.tintableMetal) {
-      material.map = material.userData.customMaskedMap || material.userData.originalMap;
+    if (material.userData.textureEligible) {
+      material.map = material.userData.originalMap;
     }
     material.needsUpdate = true;
   });
@@ -464,18 +481,20 @@ function loadCustomTexture(file) {
   if (customTextureUrl) URL.revokeObjectURL(customTextureUrl);
   customTextureUrl = URL.createObjectURL(file);
   new THREE.TextureLoader().load(customTextureUrl, (texture) => {
+    if (materialEditorTexture && materialEditorTexture !== customTexture) materialEditorTexture.dispose();
+    materialEditorTexture = null;
     customTexture?.dispose();
     customTexture = texture;
     customTexture.colorSpace = THREE.SRGBColorSpace;
     customTexture.wrapS = THREE.RepeatWrapping;
     customTexture.wrapT = THREE.RepeatWrapping;
-    customTexture.repeat.set(1.5, 1.5);
+    customTexture.repeat.set(1, 1);
     customTexture.flipY = false;
     customTexture.needsUpdate = true;
     document.querySelector("#texture-preview").style.backgroundImage = `url("${customTextureUrl}")`;
     document.querySelector("#texture-name").textContent = file.name;
     document.querySelector("#texture-remove").classList.remove("hidden");
-    applyMaskedTextureToMaterials();
+    applySymmetricTextureToMaterials();
   });
 }
 
@@ -483,6 +502,8 @@ function loadPresetTexture(url, name) {
   if (customTextureUrl) URL.revokeObjectURL(customTextureUrl);
   customTextureUrl = "";
   new THREE.TextureLoader().load(url, (texture) => {
+    if (materialEditorTexture && materialEditorTexture !== customTexture) materialEditorTexture.dispose();
+    materialEditorTexture = null;
     setActiveTexture(texture);
     document.querySelector("#texture-input").value = "";
     document.querySelector("#texture-preview").style.backgroundImage = "";
@@ -497,16 +518,19 @@ function setActiveTexture(texture) {
   customTexture.colorSpace = THREE.SRGBColorSpace;
   customTexture.wrapS = THREE.RepeatWrapping;
   customTexture.wrapT = THREE.RepeatWrapping;
-  customTexture.repeat.set(1.5, 1.5);
+  customTexture.repeat.set(1, 1);
   customTexture.flipY = false;
   customTexture.needsUpdate = true;
-  applyMaskedTextureToMaterials();
+  applySymmetricTextureToMaterials();
 }
 
 function clearCustomTexture() {
+  if (materialEditorTexture && materialEditorTexture !== customTexture) materialEditorTexture.dispose();
+  materialEditorTexture = null;
   customTexture?.dispose();
   customTexture = null;
   customTintMaterials.forEach((material) => {
+    material.userData.symmetryEnabled = false;
     material.userData.customMaskedMap?.dispose();
     material.userData.customMaskedMap = null;
   });
@@ -520,10 +544,287 @@ function clearCustomTexture() {
   applyCustomColor(selectedColorValue);
 }
 
-function applyMaskedTextureToMaterials() {
+function createSolidColorTexture(color) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 4;
+  canvas.height = 4;
+  const context = canvas.getContext("2d");
+  context.fillStyle = `#${color.getHexString()}`;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function shouldProjectTexture(material) {
+  const color = material.userData.originalColor || material.color || new THREE.Color(0xffffff);
+  return color.r * 0.2126 + color.g * 0.7152 + color.b * 0.0722 > 0.16;
+}
+
+function updateCustomSymmetryBounds(source) {
+  const box = new THREE.Box3().setFromObject(source);
+  const size = box.getSize(new THREE.Vector3());
+  customSymmetryBounds.set(
+    box.getCenter(new THREE.Vector3()).x,
+    Math.max(size.x * 0.5, 0.0001),
+    box.min.y,
+    Math.max(size.y, 0.0001)
+  );
+}
+
+function prepareSymmetryProjectionMaterial(material) {
+  material.userData.symmetryEnabled = false;
+  material.userData.symmetryUniforms = {
+    customSymmetryMap: { value: material.userData.originalMap },
+    customSymmetryBounds: { value: customSymmetryBounds },
+    customSymmetryRepeat: { value: new THREE.Vector2(1, 1) },
+    customSymmetryEnabled: { value: false }
+  };
+  material.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, material.userData.symmetryUniforms);
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vCustomWorldPosition;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvCustomWorldPosition = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;");
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", [
+        "#include <common>",
+        "uniform sampler2D customSymmetryMap;",
+        "uniform vec4 customSymmetryBounds;",
+        "uniform vec2 customSymmetryRepeat;",
+        "uniform bool customSymmetryEnabled;",
+        "varying vec3 vCustomWorldPosition;"
+      ].join("\n"))
+      .replace("#include <map_fragment>", [
+        "#ifdef USE_MAP",
+        "  vec4 originalTexel = texture2D( map, vMapUv );",
+        "  if ( customSymmetryEnabled ) {",
+        "    float symmetricX = abs( vCustomWorldPosition.x - customSymmetryBounds.x ) / customSymmetryBounds.y;",
+        "    float symmetryU = clamp( symmetricX * customSymmetryRepeat.x, 0.0, 1.0 );",
+        "    float symmetryV = clamp( ( ( vCustomWorldPosition.y - customSymmetryBounds.z ) / customSymmetryBounds.w ) * customSymmetryRepeat.y, 0.0, 1.0 );",
+        "    vec4 projectedTexel = texture2D( customSymmetryMap, vec2( symmetryU, 1.0 - symmetryV ) );",
+        "    float tintMask = step( 0.16, luminance( originalTexel.rgb ) );",
+        "    diffuseColor.rgb = mix( diffuseColor.rgb * originalTexel.rgb, projectedTexel.rgb, tintMask );",
+        "    diffuseColor.a *= originalTexel.a;",
+        "  } else {",
+        "    diffuseColor *= originalTexel;",
+        "  }",
+        "#endif"
+      ].join("\n"));
+  };
+}
+
+function updateSymmetryProjectionUniforms(material) {
+  const uniforms = material.userData.symmetryUniforms;
+  if (!uniforms) return;
+  uniforms.customSymmetryMap.value = customTexture || material.userData.originalMap;
+  uniforms.customSymmetryRepeat.value.copy(customTexture?.repeat || new THREE.Vector2(1, 1));
+  uniforms.customSymmetryBounds.value = customSymmetryBounds;
+  uniforms.customSymmetryEnabled.value = Boolean(customTexture && material.userData.textureEligible);
+  material.userData.symmetryEnabled = uniforms.customSymmetryEnabled.value;
+}
+
+function bindMaterialEditor() {
+  const editorCanvas = document.querySelector("#material-canvas");
+  const colorInput = document.querySelector("#material-node-color");
+  const addButton = document.querySelector("#material-add-node");
+  const removeButton = document.querySelector("#material-remove-node");
+  const applyButton = document.querySelector("#material-apply");
+  let draggingStopId = null;
+  if (!editorCanvas || !colorInput || !addButton || !removeButton || !applyButton) return;
+
+  const setActiveStop = (id) => {
+    materialGradient.activeId = id;
+    const activeStop = getActiveMaterialStop();
+    if (activeStop) colorInput.value = activeStop.color;
+    renderGradientHandles();
+    drawMaterialEditor();
+  };
+  const moveStop = (event, id = materialGradient.activeId, options = {}) => {
+    const stop = materialGradient.stops.find((item) => item.id === id);
+    if (!stop) return;
+    const rect = editorCanvas.getBoundingClientRect();
+    stop.x = THREE.MathUtils.clamp((event.clientX - rect.left) / rect.width, 0, 1);
+    stop.y = THREE.MathUtils.clamp((event.clientY - rect.top) / rect.height, 0, 1);
+    updateGradientHandlePosition(stop);
+    if (options.refreshHandles) renderGradientHandles();
+    drawMaterialEditor();
+  };
+
+  editorCanvas.addEventListener("pointerdown", (event) => {
+    const rect = editorCanvas.getBoundingClientRect();
+    const x = THREE.MathUtils.clamp((event.clientX - rect.left) / rect.width, 0, 1);
+    const y = THREE.MathUtils.clamp((event.clientY - rect.top) / rect.height, 0, 1);
+    const nearest = materialGradient.stops.reduce((best, stop) => {
+      const distance = Math.hypot(stop.x - x, stop.y - y);
+      return !best || distance < best.distance ? { stop, distance } : best;
+    }, null);
+    if (nearest) setActiveStop(nearest.stop.id);
+    moveStop(event);
+  });
+  document.addEventListener("pointermove", (event) => {
+    if (draggingStopId === null) return;
+    event.preventDefault();
+    moveStop(event, draggingStopId);
+  });
+  document.addEventListener("pointerup", () => {
+    draggingStopId = null;
+  });
+  document.addEventListener("pointercancel", () => {
+    draggingStopId = null;
+  });
+  colorInput.addEventListener("input", () => {
+    const activeStop = getActiveMaterialStop();
+    if (!activeStop) return;
+    activeStop.color = colorInput.value;
+    renderGradientHandles();
+    drawMaterialEditor();
+  });
+  addButton.addEventListener("click", () => {
+    const activeStop = getActiveMaterialStop() || materialGradient.stops[materialGradient.stops.length - 1];
+    const stop = {
+      id: materialGradient.nextId,
+      x: THREE.MathUtils.clamp((activeStop?.x ?? 0.5) + 0.12, 0.08, 0.92),
+      y: THREE.MathUtils.clamp((activeStop?.y ?? 0.5) + 0.08, 0.08, 0.92),
+      color: activeStop?.color || colorInput.value
+    };
+    materialGradient.nextId += 1;
+    materialGradient.stops.push(stop);
+    setActiveStop(stop.id);
+  });
+  removeButton.addEventListener("click", () => {
+    if (materialGradient.stops.length <= 1) return;
+    const activeIndex = materialGradient.stops.findIndex((stop) => stop.id === materialGradient.activeId);
+    if (activeIndex === -1) return;
+    materialGradient.stops.splice(activeIndex, 1);
+    const nextStop = materialGradient.stops[Math.max(0, activeIndex - 1)];
+    setActiveStop(nextStop.id);
+  });
+  applyButton.addEventListener("click", applyMaterialEditorTexture);
+  window.materialEditorStartDrag = (id) => {
+    draggingStopId = id;
+  };
+  window.materialEditorMoveStop = moveStop;
+  window.materialEditorSetActiveStop = setActiveStop;
+  renderGradientHandles();
+  drawMaterialEditor();
+}
+
+function getActiveMaterialStop() {
+  return materialGradient.stops.find((stop) => stop.id === materialGradient.activeId) || materialGradient.stops[0];
+}
+
+function renderGradientHandles() {
+  const handlesLayer = document.querySelector("#gradient-handles");
+  const colorInput = document.querySelector("#material-node-color");
+  const removeButton = document.querySelector("#material-remove-node");
+  if (!handlesLayer) return;
+  handlesLayer.innerHTML = "";
+  materialGradient.stops.forEach((stop, index) => {
+    const handle = document.createElement("button");
+    handle.className = `gradient-handle${stop.id === materialGradient.activeId ? " active" : ""}`;
+    handle.type = "button";
+    handle.dataset.stopId = String(stop.id);
+    handle.style.left = `${stop.x * 100}%`;
+    handle.style.top = `${stop.y * 100}%`;
+    handle.style.background = stop.color;
+    handle.setAttribute("aria-label", `渐变颜色节点 ${index + 1}`);
+    handle.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      window.materialEditorSetActiveStop?.(stop.id);
+      window.materialEditorStartDrag?.(stop.id);
+      window.materialEditorMoveStop?.(event, stop.id);
+    });
+    handlesLayer.appendChild(handle);
+  });
+  const activeStop = getActiveMaterialStop();
+  if (colorInput && activeStop) colorInput.value = activeStop.color;
+  if (removeButton) removeButton.disabled = materialGradient.stops.length <= 1;
+}
+
+function updateGradientHandlePosition(stop) {
+  const handle = document.querySelector(`.gradient-handle[data-stop-id="${stop.id}"]`);
+  if (!handle) return;
+  handle.style.left = `${stop.x * 100}%`;
+  handle.style.top = `${stop.y * 100}%`;
+}
+
+function drawMaterialEditor() {
+  const editorCanvas = document.querySelector("#material-canvas");
+  if (!editorCanvas) return;
+
+  const width = editorCanvas.width;
+  const height = editorCanvas.height;
+  const context = editorCanvas.getContext("2d");
+  const imageData = context.createImageData(width, height);
+  const stops = materialGradient.stops.map((stop) => ({
+    x: stop.x * (width - 1),
+    y: stop.y * (height - 1),
+    color: hexToRgb(stop.color)
+  }));
+
+  if (stops.length === 1) {
+    const [stop] = stops;
+    context.fillStyle = `rgb(${stop.color.r}, ${stop.color.g}, ${stop.color.b})`;
+    context.fillRect(0, 0, width, height);
+    return;
+  }
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      let red = 0;
+      let green = 0;
+      let blue = 0;
+      let total = 0;
+      stops.forEach((stop) => {
+        const dx = x - stop.x;
+        const dy = y - stop.y;
+        const weight = 1 / (dx * dx + dy * dy + 900);
+        red += stop.color.r * weight;
+        green += stop.color.g * weight;
+        blue += stop.color.b * weight;
+        total += weight;
+      });
+      const index = (y * width + x) * 4;
+      imageData.data[index] = Math.round(red / total);
+      imageData.data[index + 1] = Math.round(green / total);
+      imageData.data[index + 2] = Math.round(blue / total);
+      imageData.data[index + 3] = 255;
+    }
+  }
+  context.putImageData(imageData, 0, 0);
+}
+
+function hexToRgb(hex) {
+  const value = Number.parseInt(hex.replace("#", ""), 16);
+  return {
+    r: (value >> 16) & 255,
+    g: (value >> 8) & 255,
+    b: value & 255
+  };
+}
+
+function applyMaterialEditorTexture() {
+  const editorCanvas = document.querySelector("#material-canvas");
+  if (!editorCanvas) return;
+  materialEditorTexture?.dispose();
+  materialEditorTexture = new THREE.CanvasTexture(editorCanvas);
+  materialEditorTexture.colorSpace = THREE.SRGBColorSpace;
+  materialEditorTexture.wrapS = THREE.RepeatWrapping;
+  materialEditorTexture.wrapT = THREE.RepeatWrapping;
+  materialEditorTexture.repeat.set(1, 1);
+  materialEditorTexture.flipY = false;
+  materialEditorTexture.needsUpdate = true;
+  setActiveTexture(materialEditorTexture);
+  document.querySelector("#texture-remove").classList.remove("hidden");
+  document.querySelectorAll("[data-texture]").forEach((item) => item.classList.remove("active"));
+}
+
+function applySymmetricTextureToMaterials() {
   customTintMaterials.forEach((material) => {
     material.userData.customMaskedMap?.dispose();
-    material.userData.customMaskedMap = createMaskedTexture(material.userData.originalMap, customTexture);
+    material.userData.customMaskedMap = null;
+    updateSymmetryProjectionUniforms(material);
   });
   applyCustomColor(selectedColorValue);
 }
@@ -546,9 +847,7 @@ function createMaskedTexture(originalTexture, uploadedTexture) {
   const originalPixels = context.getImageData(0, 0, width, height);
 
   context.clearRect(0, 0, width, height);
-  const pattern = context.createPattern(uploadedTexture.image, "repeat");
-  context.fillStyle = pattern;
-  context.fillRect(0, 0, width, height);
+  drawSymmetricTextureFill(context, uploadedTexture.image, width, height);
   const uploadedPixels = context.getImageData(0, 0, width, height);
 
   for (let index = 0; index < originalPixels.data.length; index += 4) {
@@ -573,6 +872,28 @@ function createMaskedTexture(originalTexture, uploadedTexture) {
   return texture;
 }
 
+function drawSymmetricTextureFill(context, image, width, height) {
+  const source = document.createElement("canvas");
+  source.width = width;
+  source.height = height;
+  const sourceContext = source.getContext("2d");
+  const pattern = sourceContext.createPattern(image, "repeat");
+  sourceContext.fillStyle = pattern;
+  sourceContext.fillRect(0, 0, width, height);
+  drawMirroredLeftHalf(context, source, width, height);
+}
+
+function drawMirroredLeftHalf(context, source, width, height) {
+  const halfWidth = Math.ceil(width / 2);
+  context.clearRect(0, 0, width, height);
+  context.drawImage(source, 0, 0, halfWidth, height, 0, 0, halfWidth, height);
+  context.save();
+  context.translate(width, 0);
+  context.scale(-1, 1);
+  context.drawImage(source, 0, 0, halfWidth, height, 0, 0, halfWidth, height);
+  context.restore();
+}
+
 function addStudioPanel(targetScene, position, size, color, rotation) {
   const panel = new THREE.Mesh(
     new THREE.PlaneGeometry(size[0], size[1]),
@@ -584,13 +905,17 @@ function addStudioPanel(targetScene, position, size, color, rotation) {
 }
 
 function updateCustomSummary() {
-  document.querySelector("#custom-summary").textContent =
-    `Back ${String(selectedBack + 1).padStart(2, "0")} · ${selectedColorName}`;
+  const summaryElement = document.querySelector("#custom-summary");
+  if (!summaryElement) return;
+  summaryElement.textContent = `Back ${String(selectedBack + 1).padStart(2, "0")}`;
 }
 
 async function exportPoster() {
   const button = document.querySelector("#poster-export");
   const statusElement = document.querySelector("#poster-status");
+  const modal = document.querySelector("#poster-modal");
+  const previewImage = document.querySelector("#poster-preview");
+  const posterNumber = document.querySelector("#poster-number");
   const view = window.customView;
   if (!view || !customBacks.length) {
     statusElement.textContent = "模型仍在载入，请稍后再试。";
@@ -599,83 +924,158 @@ async function exportPoster() {
 
   button.disabled = true;
   button.textContent = "生成中...";
-  statusElement.textContent = "正在渲染高分辨率海报...";
+  statusElement.textContent = "正在生成海报预览...";
 
   try {
-    await document.fonts.ready;
-    const signature = await loadImage("./assets/poster/signature.png");
-    const previousSize = view.renderer.getSize(new THREE.Vector2());
-    const previousPixelRatio = view.renderer.getPixelRatio();
-    const previousAspect = view.camera.aspect;
-    const previousBackground = view.scene.background;
-    const posterBackground = new THREE.Color(0xf2f2f0);
+    posterNameValue = getPosterName();
+    posterModelSnapshot = await createPosterModelSnapshot();
+    posterPreviewUrl = await createPosterImage(posterNameValue, posterModelSnapshot);
+    previewImage.src = posterPreviewUrl;
+    posterNumber.textContent = `NO.${String(selectedBack + 1).padStart(3, "0")}`;
+    modal.classList.remove("hidden");
+    modal.setAttribute("aria-hidden", "false");
+    document.body.classList.add("poster-modal-open");
+    statusElement.textContent = "海报预览已打开。";
+  } catch (error) {
+    console.error(error);
+    statusElement.textContent = "海报生成失败，请重试。";
+  } finally {
+    button.disabled = false;
+    button.textContent = "重新创建";
+  }
+}
 
+async function createPosterModelSnapshot() {
+  const view = window.customView;
+  const previousSize = view.renderer.getSize(new THREE.Vector2());
+  const previousPixelRatio = view.renderer.getPixelRatio();
+  const previousAspect = view.camera.aspect;
+  const previousBackground = view.scene.background;
+  const posterBackground = new THREE.Color(0xf2f2f0);
+  let snapshotUrl = "";
+  try {
     view.renderer.setPixelRatio(1);
     view.renderer.setSize(1800, 1800, false);
     view.camera.aspect = 1;
     view.camera.updateProjectionMatrix();
     view.scene.background = posterBackground;
     view.renderer.render(view.scene, view.camera);
-
-    const poster = document.createElement("canvas");
-    poster.width = 1800;
-    poster.height = 2400;
-    const context = poster.getContext("2d");
-    context.fillStyle = "#f2f2f0";
-    context.fillRect(0, 0, poster.width, poster.height);
-
-    context.fillStyle = "#111111";
-    context.textBaseline = "alphabetic";
-    context.textAlign = "left";
-    context.font = '400 40px "Gilroy", Arial, sans-serif';
-    context.fillText("Endless Form", 122, 138);
-    context.font = '400 16px "Gilroy", Arial, sans-serif';
-    drawTrackedText(context, "DIGITAL ART PRACTICE · 2026", 1500, 138, 5);
-
-    context.fillStyle = "rgba(17,17,17,.25)";
-    context.fillRect(122, 190, 1556, 2);
-
-    context.fillStyle = "#111111";
-    context.font = '400 250px "Gilroy", Arial, sans-serif';
-    context.fillText("Mesh Rare", 112, 530);
-    context.font = '400 38px "Gilroy", "PingFang SC", Arial, sans-serif';
-    context.fillText("我们，生而不同。", 150, 660);
-
-    // Keep the model clear of the headline and slogan so every character
-    // remains fully readable.
-    context.drawImage(customCanvas, 180, 680, 1440, 1440);
-
-    context.fillStyle = "#111111";
-    context.font = '400 18px "Gilroy", Arial, sans-serif';
-    drawTrackedText(context, `BACK ${String(selectedBack + 1).padStart(2, "0")} · ${selectedColorName.toUpperCase()}`, 420, 1995, 3);
-    context.drawImage(signature, 1135, 1875, 480, 194);
-    context.fillStyle = "rgba(17,17,17,.25)";
-    context.fillRect(122, 2070, 1556, 2);
-    context.fillStyle = "#111111";
-    context.font = '400 28px "Gilroy", Arial, sans-serif';
-    context.fillText("ONE STRUCTURE, ENDLESS IDENTITIES.", 122, 2170);
-    context.font = '400 17px "Gilroy", Arial, sans-serif';
-    context.fillText("MESH RARE · CUSTOM OBJECT", 122, 2240);
-
+    snapshotUrl = customCanvas.toDataURL("image/png");
+  } finally {
     view.scene.background = previousBackground;
     view.renderer.setPixelRatio(previousPixelRatio);
     view.renderer.setSize(previousSize.x, previousSize.y, false);
     view.camera.aspect = previousAspect;
     view.camera.updateProjectionMatrix();
     view.renderer.render(view.scene, view.camera);
+  }
+  return await loadImage(snapshotUrl);
+}
 
-    const link = document.createElement("a");
-    link.download = `mesh-rare-back-${String(selectedBack + 1).padStart(2, "0")}.png`;
-    link.href = poster.toDataURL("image/png");
-    link.click();
-    statusElement.textContent = "海报已生成并下载。";
+async function createPosterImage(title = getPosterName(), modelImage = posterModelSnapshot) {
+  if (!modelImage) modelImage = await createPosterModelSnapshot();
+  await document.fonts.ready;
+  const signature = await loadImage("./assets/poster/signature.png");
+  const poster = document.createElement("canvas");
+  poster.width = 1800;
+  poster.height = 2400;
+  const context = poster.getContext("2d");
+  context.fillStyle = "#f2f2f0";
+  context.fillRect(0, 0, poster.width, poster.height);
+
+  context.fillStyle = "#111111";
+  context.textBaseline = "alphabetic";
+  context.textAlign = "left";
+  context.font = '400 40px "Gilroy", Arial, sans-serif';
+  context.fillText("Endless Form", 122, 138);
+  context.font = '400 16px "Gilroy", Arial, sans-serif';
+  drawTrackedText(context, "DIGITAL ART PRACTICE · 2026", 1500, 138, 5);
+
+  context.fillStyle = "rgba(17,17,17,.25)";
+  context.fillRect(122, 190, 1556, 2);
+
+  context.fillStyle = "#111111";
+  drawPosterTitle(context, title, 112, 530, 1350);
+  context.font = '400 38px "Gilroy", "PingFang SC", Arial, sans-serif';
+  context.fillText("我们，生而不同。", 150, 660);
+
+  // Keep the model clear of the headline and slogan so every character
+  // remains fully readable.
+  context.drawImage(modelImage, 180, 680, 1440, 1440);
+
+  context.fillStyle = "#111111";
+  context.font = '400 18px "Gilroy", Arial, sans-serif';
+  drawTrackedText(context, `BACK ${String(selectedBack + 1).padStart(2, "0")}`, 260, 1995, 3);
+  context.drawImage(signature, 1135, 1875, 480, 194);
+  context.fillStyle = "rgba(17,17,17,.25)";
+  context.fillRect(122, 2070, 1556, 2);
+  context.fillStyle = "#111111";
+  context.font = '400 28px "Gilroy", Arial, sans-serif';
+  context.fillText("ONE STRUCTURE, ENDLESS IDENTITIES.", 122, 2170);
+  context.font = '400 17px "Gilroy", Arial, sans-serif';
+  context.fillText("MESH RARE · CUSTOM OBJECT", 122, 2240);
+
+  return poster.toDataURL("image/png");
+}
+
+function downloadPosterPreview() {
+  const statusElement = document.querySelector("#poster-status");
+  if (!posterPreviewUrl) {
+    statusElement.textContent = "请先生成海报预览。";
+    return;
+  }
+  const link = document.createElement("a");
+  link.download = `${slugifyPosterName(getPosterName())}-back-${String(selectedBack + 1).padStart(2, "0")}.png`;
+  link.href = posterPreviewUrl;
+  link.click();
+  statusElement.textContent = "图片已下载。";
+}
+
+function getPosterName() {
+  const input = document.querySelector("#poster-name-input");
+  const value = input?.value.trim();
+  return value || "Mesh Rare";
+}
+
+function slugifyPosterName(name) {
+  return (name || "mesh-rare")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "mesh-rare";
+}
+
+function updatePosterName() {
+  posterNameValue = getPosterName();
+  const modal = document.querySelector("#poster-modal");
+  if (modal.classList.contains("hidden") || !posterPreviewUrl) return;
+  window.clearTimeout(posterNameUpdateTimer);
+  posterNameUpdateTimer = window.setTimeout(refreshPosterNamePreview, 420);
+}
+
+async function refreshPosterNamePreview() {
+  const token = posterNameUpdateToken + 1;
+  posterNameUpdateToken = token;
+  const statusElement = document.querySelector("#poster-status");
+  const previewImage = document.querySelector("#poster-preview");
+  statusElement.textContent = "正在更新海报命名...";
+  try {
+    const nextPreviewUrl = await createPosterImage(getPosterName());
+    if (token !== posterNameUpdateToken) return;
+    posterPreviewUrl = nextPreviewUrl;
+    previewImage.src = posterPreviewUrl;
+    statusElement.textContent = "命名已更新，可下载图片。";
   } catch (error) {
     console.error(error);
-    statusElement.textContent = "海报生成失败，请重试。";
-  } finally {
-    button.disabled = false;
-    button.textContent = "导出 PNG";
+    statusElement.textContent = "命名更新失败，请重试。";
   }
+}
+
+function closePosterPreview() {
+  const modal = document.querySelector("#poster-modal");
+  modal.classList.add("hidden");
+  modal.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("poster-modal-open");
 }
 
 function loadImage(url) {

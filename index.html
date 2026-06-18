@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f3f0e9" />
     <title>Endless Form / Chair Collection</title>
-    <link rel="stylesheet" href="./styles.css?v=20260613-4" />
+    <link rel="stylesheet" href="./styles.css?v=20260618-2" />
   </head>
   <body>
     <header class="site-header">
@@ -91,24 +91,17 @@
         <div class="customizer-heading">
           <p class="eyebrow">MADE BY YOU</p>
           <h2>Build Your<br />Endless Form.</h2>
-          <p>以椅身为基础，选择不同的椅背结构、钛合金电着色与自定义材质，创造属于你的 Mesh Rare。</p>
+          <p>以椅身为基础，选择不同的椅背结构与自定义材质，创造属于你的 Mesh Rare。</p>
         </div>
 
         <div class="customizer-workspace">
-          <div class="customizer-stage">
-            <canvas id="custom-canvas" aria-label="定制椅子三维预览"></canvas>
-            <span class="custom-status" id="custom-status">正在载入定制组件...</span>
-            <span class="custom-drag-note">拖动旋转 · 滚轮缩放</span>
-          </div>
-
-          <div class="customizer-controls">
-            <div class="custom-summary">
-              <span>CURRENT CONFIGURATION</span>
-              <strong id="custom-summary">Back 01 · Pale Blue</strong>
-            </div>
-
+          <aside class="back-panel">
             <fieldset>
-              <legend>选择椅背 <span id="back-count">01 / 06</span></legend>
+              <legend>
+                <span>SELECT BACKREST</span>
+                <strong>选择椅背</strong>
+                <small id="back-count">01 / 06</small>
+              </legend>
               <div class="back-options">
                 <button class="option-button active" type="button" data-back="0"><span>01</span><strong>Back 01</strong></button>
                 <button class="option-button" type="button" data-back="1"><span>02</span><strong>Back 02</strong></button>
@@ -118,30 +111,50 @@
                 <button class="option-button" type="button" data-back="5"><span>06</span><strong>Back 06</strong></button>
               </div>
             </fieldset>
-
-            <fieldset>
-              <legend>钛合金电着色 <span>05 COLORS</span></legend>
-              <div class="color-options">
-                <button class="color-button active" type="button" data-color="#9fc9df" data-color-name="Pale Blue" aria-label="浅蓝色"><i style="--swatch:#9fc9df"></i><span>浅蓝色</span></button>
-                <button class="color-button" type="button" data-color="#ead2cf" data-color-name="Cream Pink" aria-label="奶油粉"><i style="--swatch:#ead2cf"></i><span>奶油粉</span></button>
-                <button class="color-button" type="button" data-color="#c9bee0" data-color-name="Soft Violet" aria-label="淡紫色"><i style="--swatch:#c9bee0"></i><span>淡紫色</span></button>
-                <button class="color-button" type="button" data-color="#294d78" data-color-name="Deep Blue" aria-label="深蓝色"><i style="--swatch:#294d78"></i><span>深蓝色</span></button>
-                <button class="color-button" type="button" data-color="#d8c39b" data-color-name="Pale Gold" aria-label="浅金色"><i style="--swatch:#d8c39b"></i><span>浅金色</span></button>
+            <div class="poster-export">
+              <div>
+                <span>CREATE YOUR POSTER</span>
+                <strong>创建海报</strong>
               </div>
-              <button class="color-remove remove-action" id="color-remove" type="button">
-                <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5"/></svg>
-                <span>移除颜色 · 恢复原始材质</span>
-              </button>
-            </fieldset>
+              <button id="poster-export" type="button">创建海报</button>
+              <p id="poster-status" aria-live="polite">将基于目前视角创建您的专属海报。</p>
+            </div>
+          </aside>
 
+          <div class="customizer-stage">
+            <canvas id="custom-canvas" aria-label="定制椅子三维预览"></canvas>
+            <span class="custom-status" id="custom-status">正在载入定制组件...</span>
+            <span class="custom-drag-note">拖动旋转 · 滚轮缩放</span>
+          </div>
+
+          <div class="customizer-controls">
             <fieldset class="texture-panel">
-              <legend>材质与纹理 <span>05 MATERIALS</span></legend>
+              <legend>
+                <span>MATERIALS · EDITOR</span>
+                <strong>材质与纹理</strong>
+              </legend>
               <div class="material-options">
-                <button class="material-button" type="button" data-texture="./assets/material-presets/color-fabric.png" data-texture-name="彩色布"><i style="--texture:url('./assets/material-presets/color-fabric.png')"></i><span>彩色布</span></button>
-                <button class="material-button" type="button" data-texture="./assets/material-presets/color-fabric-2.png" data-texture-name="彩色布 2"><i style="--texture:url('./assets/material-presets/color-fabric-2.png')"></i><span>彩色布 2</span></button>
-                <button class="material-button" type="button" data-texture="./assets/material-presets/tech-wood.png" data-texture-name="科技木"><i style="--texture:url('./assets/material-presets/tech-wood.png')"></i><span>科技木</span></button>
-                <button class="material-button" type="button" data-texture="./assets/material-presets/tech-wood-2.png" data-texture-name="科技木 2"><i style="--texture:url('./assets/material-presets/tech-wood-2.png')"></i><span>科技木 2</span></button>
-                <button class="material-button" type="button" data-texture="./assets/material-presets/bronze.png" data-texture-name="青铜"><i style="--texture:url('./assets/material-presets/bronze.png')"></i><span>青铜</span></button>
+                <button class="material-button" type="button" data-texture="./assets/material-presets/psychedelic-purple.png?v=20260617-47" data-texture-name="迷幻紫"><i style="--texture:url('./assets/material-presets/psychedelic-purple.png?v=20260617-47')"></i><span>迷幻紫</span></button>
+                <button class="material-button" type="button" data-texture="./assets/material-presets/spring-green.png?v=20260617-42" data-texture-name="春日青"><i style="--texture:url('./assets/material-presets/spring-green.png?v=20260617-42')"></i><span>春日青</span></button>
+                <button class="material-button" type="button" data-texture="./assets/material-presets/bronze-updated.png?v=20260617-42" data-texture-name="青铜"><i style="--texture:url('./assets/material-presets/bronze-updated.png?v=20260617-42')"></i><span>青铜</span></button>
+                <button class="material-button" type="button" data-texture="./assets/material-presets/tech-wood-2-updated.png?v=20260617-42" data-texture-name="科技木 2"><i style="--texture:url('./assets/material-presets/tech-wood-2-updated.png?v=20260617-42')"></i><span>科技木 2</span></button>
+                <button class="material-button" type="button" data-texture="./assets/material-presets/rose-red.png?v=20260617-42" data-texture-name="玫红"><i style="--texture:url('./assets/material-presets/rose-red.png?v=20260617-42')"></i><span>玫红</span></button>
+                <button class="material-button" type="button" data-texture="./assets/material-presets/white-marble.png?v=20260617-42" data-texture-name="白色大理石"><i style="--texture:url('./assets/material-presets/white-marble.png?v=20260617-42')"></i><span>白色大理石</span></button>
+                <button class="material-button" type="button" data-texture="./assets/material-presets/warm-sun.png?v=20260617-42" data-texture-name="暖日"><i style="--texture:url('./assets/material-presets/warm-sun.png?v=20260617-42')"></i><span>暖日</span></button>
+                <button class="material-button" type="button" data-texture="./assets/material-presets/tech-wood-updated.png?v=20260617-42" data-texture-name="科技木"><i style="--texture:url('./assets/material-presets/tech-wood-updated.png?v=20260617-42')"></i><span>科技木</span></button>
+              </div>
+              <div class="texture-editor" id="texture-editor">
+                <canvas id="material-canvas" width="512" height="512" aria-label="材质渐变编辑画布"></canvas>
+                <div class="gradient-handles" id="gradient-handles"></div>
+                <div class="editor-controls">
+                  <label>
+                    <span>当前颜色</span>
+                    <input id="material-node-color" type="color" value="#6fb7d6" />
+                  </label>
+                  <button id="material-add-node" type="button">增加节点</button>
+                  <button id="material-remove-node" type="button">删除节点</button>
+                  <button id="material-apply" type="button">应用编辑材质</button>
+                </div>
               </div>
               <label class="texture-upload" id="texture-upload">
                 <input id="texture-input" type="file" accept="image/png,image/jpeg,image/webp" />
@@ -158,24 +171,14 @@
               </button>
               <p class="texture-note">纹理仅应用于当前可着色区域，黑色框架与黑色块面保持不变。</p>
             </fieldset>
-
-            <div class="poster-export">
-              <div>
-                <span>CREATE YOUR POSTER</span>
-                <strong>导出专属海报</strong>
-              </div>
-              <button id="poster-export" type="button">导出 PNG</button>
-              <p id="poster-status" aria-live="polite">将当前模型、视角与材质导出为高分辨率海报。</p>
-            </div>
-
           </div>
         </div>
       </section>
 
       <section class="closing">
         <div>
-          <p class="eyebrow">AUTHORED IN BLENDER</p>
-          <h2>Original Textures,<br />Endless Expression.</h2>
+          <p class="eyebrow">KEEP IN ENDLESS FORM</p>
+          <h2>Endless Texture,<br />Endless Expression.</h2>
         </div>
         <p>张周捷的作品带有鲜明的独立性、实验性和未来性，探索数字形态的演化及制造。张周捷认为，数字语境中的事物可以像自然界万物般生长变化，他所做的即是寻找其中的原理和迹象。他的作品主要关注逻辑的极简性、结果的多样性和不可预见性，这一切都源自他对自然的理解。</p>
         <a class="text-link" href="#collection">返回顶部 <span>↑</span></a>
@@ -188,6 +191,28 @@
       <span>七把椅子系列</span>
     </footer>
 
+    <div class="poster-modal hidden" id="poster-modal" aria-hidden="true">
+      <div class="poster-dialog" role="dialog" aria-modal="true" aria-labelledby="poster-modal-title">
+        <figure class="poster-preview" id="poster-preview-wrap">
+          <img id="poster-preview" alt="海报预览" />
+        </figure>
+        <aside class="poster-actions">
+          <button class="poster-close-icon" id="poster-close-icon" type="button" aria-label="关闭海报预览">×</button>
+          <p>CREATE POSTER</p>
+          <label class="poster-name-field" id="poster-modal-title">
+            <span>命名</span>
+            <input id="poster-name-input" type="text" value="Mesh Rare" maxlength="28" autocomplete="off" />
+          </label>
+          <dl>
+            <dt>NUMBER</dt>
+            <dd id="poster-number">NO.001</dd>
+          </dl>
+          <button class="poster-download" id="poster-download" type="button">下载图片</button>
+          <button class="poster-close" id="poster-close" type="button">关闭</button>
+        </aside>
+      </div>
+    </div>
+
     <script type="importmap">
       {
         "imports": {
@@ -196,6 +221,6 @@
         }
       }
     </script>
-    <script type="module" src="./app.js?v=20260614-2"></script>
+    <script type="module" src="./app.js?v=20260618-2"></script>
   </body>
 </html>
